@@ -1,7 +1,9 @@
 import path from "path"
 import dotenv from "dotenv"
-import AWS from "aws-sdk"
-import { AthenaExpress, ConnectionConfigInterface } from "athena-express"
+import AWS, { Athena } from "aws-sdk"
+
+import AthenaExpress from "./athena-express-custom"
+import type { ConnectionConfigInterface } from "./athena-express-custom"
 
 // Load environment variables from .env file
 dotenv.config({
@@ -11,6 +13,14 @@ dotenv.config({
 const TEST_QUERY = `
     SELECT state FROM lake_table01 LIMIT 10;
 `
+
+const extraAthenaClientParams: Athena.ClientConfiguration = {
+    endpoint: "changeme",
+}
+
+const extraS3ClientParams: AWS.S3.ClientConfiguration = {
+    endpoint: "changeme",
+}
 
 /**
  * ============================
@@ -61,6 +71,8 @@ AWS.config.update({
 })
 
 const athenaExpressConfig: Partial<ConnectionConfigInterface> = {
+    extraS3ClientParams,
+    extraAthenaClientParams,
     aws: AWS, // required
     /**
      * The location in Amazon S3 where your query results are stored, such as s3://path/to/query/bucket/.
