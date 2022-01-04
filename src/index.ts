@@ -159,7 +159,7 @@ const athenaV3Client = new AthenaV3.AthenaClient({
     // Unsure of these:
     // tls: true,
     // useFipsEndpoint: true,
-    region: process.env["AWS_DEFAULT_REGION"] || "",
+    region: AWS_DEFAULT_REGION,
     credentials: {
         accessKeyId: process.env["AWS_ACCESS_KEY_ID"] || "",
         secretAccessKey: process.env["AWS_SECRET_ACCESS_KEY"] || "",
