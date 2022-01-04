@@ -38,6 +38,15 @@ module.exports = class AthenaExpress {
             pagination: Number(init.pagination) || 0,
             NextToken: init.nextToken || null,
         }
+
+        console.log("===========================================================")
+        console.log("AthenaExpress - aws.Athena() current settings:", {
+            credentials: init.aws.config.credentials,
+            region: init.aws.config.region,
+            athena: init.aws.config.athena,
+            s3: init.aws.config.s3,
+        })
+        console.log("===========================================================")
     }
 
     async query(query) {
