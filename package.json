@@ -1,0 +1,22 @@
+{
+  "name": "athena-aws-minimal",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon src/index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "athena-express": "^7.1.2",
+    "aws-sdk": "^2.1049.0",
+    "dotenv": "^10.0.0",
+    "nodemon": "^2.0.15",
+    "ts-node": "^10.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^17.0.7"
+  }
+}
