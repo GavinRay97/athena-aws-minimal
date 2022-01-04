@@ -1,9 +1,17 @@
 import path from "path"
 import dotenv from "dotenv"
 import AWS, { Athena } from "aws-sdk"
+import * as AthenaV3 from "@aws-sdk/client-athena"
 
 import AthenaExpress from "./athena-express-custom"
 import type { ConnectionConfigInterface } from "./athena-express-custom"
+
+import {
+    GetQueryExecutionCommand,
+    GetQueryResultsCommand,
+    QueryExecutionState,
+    StartQueryExecutionCommand,
+} from "@aws-sdk/client-athena"
 
 // Load environment variables from .env file
 dotenv.config({
@@ -36,7 +44,7 @@ const AWS_SESSION_TOKEN = process.env["AWS_SESSION_TOKEN"]
 const AWS_S3_RESULT_BUCKET_ADDRESS = process.env["AWS_S3_RESULT_BUCKET_ADDRESS"]
 
 const AWS_ATHENA_CATALOG_NAME = process.env["AWS_ATHENA_CATALOG_NAME"] || "AwsDataCatalog"
-const AWS_ATHENA_DB_NAME = process.env["AWS_ATHENA_DB_NAME"] || "sampledb"
+const AWS_ATHENA_DB_NAME = process.env["AWS_ATHENA_DB_NAME"] || "default"
 
 const AWS_ATHENA_OPTION_FORMAT_JSON = process.env["AWS_ATHENA_OPTION_FORMAT_JSON"]
     ? Boolean(process.env["AWS_ATHENA_OPTION_GET_QUERY_STATS"])
@@ -140,6 +148,109 @@ console.log("CONFIGURING ATHENA CLIENT WITH PARAMETERS: ", {
     ...athenaExpressConfig,
     aws: "<IGNORED>",
 })
+
+/**
+ * ============================
+ * AWS Athena V3 Client Test
+ * ============================
+ */
+
+const athenaV3Client = new AthenaV3.AthenaClient({
+    // Unsure of these:
+    // tls: true,
+    // useFipsEndpoint: true,
+    credentials: {
+        accessKeyId: process.env["AWS_ACCESS_KEY_ID"] || "",
+        secretAccessKey: process.env["AWS_SECRET_ACCESS_KEY"] || "",
+        sessionToken: process.env["AWS_SESSION_TOKEN"] || "",
+    },
+    logger: console,
+})
+
+async function testAthenaV3() {
+    try {
+        const queryInput: AthenaV3.StartQueryExecutionCommandInput = {
+            QueryString: TEST_QUERY,
+            ResultConfiguration: {
+                OutputLocation: AWS_S3_RESULT_BUCKET_ADDRESS,
+            },
+            QueryExecutionContext: {
+                Catalog: AWS_ATHENA_CATALOG_NAME,
+            },
+        }
+
+        if (AWS_ATHENA_DB_NAME) {
+            queryInput.QueryExecutionContext!.Database = AWS_ATHENA_DB_NAME
+        }
+
+        if (AWS_ATHENA_OPTION_WORKGROUP) {
+            queryInput.WorkGroup = AWS_ATHENA_OPTION_WORKGROUP
+        }
+
+        if (AWS_ATHENA_OPTION_ENCRYPTION_ENABLED) {
+            queryInput.ResultConfiguration!.EncryptionConfiguration = {
+                EncryptionOption: AWS_ATHENA_OPTION_ENCRYPTION_TYPE,
+                [AWS_ATHENA_OPTION_ENCRYPTION_KEY]: AWS_ATHENA_OPTION_ENCRYPTION_VALUE,
+            }
+        }
+
+        const response = await athenaV3Client.send(new StartQueryExecutionCommand(queryInput))
+        console.log("testAthenaV3 [StartQueryExecutionCommand]", response)
+
+        const QUERY_CHECK_INTERVAL_MS = 1000
+        const checkQueryInterval = setInterval(async () => {
+            const queryExecutionState = await athenaV3Client.send(
+                new GetQueryExecutionCommand({ QueryExecutionId: response.QueryExecutionId })
+            )
+
+            const state = queryExecutionState?.QueryExecution?.Status?.State
+            if (!state) throw new Error("No state in queryExecutionState")
+
+            console.log("GetQueryExecutionCommand State:", state)
+            switch (state) {
+                case QueryExecutionState.FAILED: {
+                    console.log("Query failed")
+                    console.dir(queryExecutionState, { depth: Infinity })
+                    clearInterval(checkQueryInterval)
+                    break
+                }
+                case QueryExecutionState.CANCELLED: {
+                    console.log("Query cancelled")
+                    clearInterval(checkQueryInterval)
+                    break
+                }
+                case QueryExecutionState.QUEUED: {
+                    console.log("Query queued")
+                    break
+                }
+                case QueryExecutionState.RUNNING: {
+                    console.log("Query running")
+                    break
+                }
+                case QueryExecutionState.SUCCEEDED: {
+                    console.log("Query succeeded")
+
+                    const response2 = await athenaV3Client.send(
+                        new GetQueryResultsCommand({
+                            QueryExecutionId: response.QueryExecutionId,
+                            MaxResults: 10,
+                        })
+                    )
+
+                    console.log("testAthenaV3 [GetQueryResults]")
+                    console.dir(response2, { depth: Infinity })
+
+                    clearInterval(checkQueryInterval)
+                    break
+                }
+            }
+        }, QUERY_CHECK_INTERVAL_MS)
+    } catch (e) {
+        console.log("Error in testAthenaV3()", e)
+    }
+}
+
+testAthenaV3()
 
 /**
  * ============================
