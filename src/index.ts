@@ -1,13 +1,7 @@
 import path from "path"
 import dotenv from "dotenv"
-import AWS, { Athena } from "aws-sdk"
-import * as AthenaV3 from "@aws-sdk/client-athena"
-import {
-    GetQueryExecutionCommand,
-    GetQueryResultsCommand,
-    QueryExecutionState,
-    StartQueryExecutionCommand,
-} from "@aws-sdk/client-athena"
+import AWS from "aws-sdk"
+import { default as proxy } from "proxy-agent"
 
 import AthenaExpress from "./athena-express-custom"
 import type { ConnectionConfigInterface } from "./athena-express-custom"
@@ -30,66 +24,37 @@ import {
     AWS_ATHENA_OPTION_IGNORE_EMPTY_FIELDS,
     AWS_ATHENA_OPTION_WORKGROUP,
     AWS_ATHENA_OPTION_RETRY_MS,
-    AWS_ATHENA_OPTION_ENCRYPTION_ENABLED,
-    AWS_ATHENA_OPTION_ENCRYPTION_TYPE,
-    AWS_ATHENA_OPTION_ENCRYPTION_KEY,
-    AWS_ATHENA_OPTION_ENCRYPTION_VALUE,
+    AWS_OPTION_HTTP_OPTIONS_PROXY_URL,
 } from "./env-config"
-
-/**
- * ============================
- * USER CONFIGURATION
- * (Change me)
- * ============================
- */
 
 const TEST_QUERY = `
  SELECT id FROM albums LIMIT 10;
 `
 
-const awsAthenaEndpoint = "https://athena.us-east-1.amazonaws.com"
-const awsS3Endpoint = "https://s3.us-east-1.amazonaws.com"
-
-const awsHttpOptions: AWS.HTTPOptions = {
-    // Uncomment if using proxy
-    // proxy: "http://site.com",
-    // Uncomment if using proxy agent
-    // agent: proxyAgent("http://site.com"),
-}
-
 /**
  * ============================
- * USER CONFIGURATION
- * (Change me)
+ * Configure AWS
  * ============================
  */
 
-const awsCredentials = new AWS.Credentials({
-    accessKeyId: AWS_ACCESS_KEY_ID || "",
-    secretAccessKey: AWS_SECRET_ACCESS_KEY || "",
-    ...(AWS_SESSION_TOKEN && { sessionToken: AWS_SESSION_TOKEN }),
-})
-
-AWS.config.update({
+const awsConfig: AWS.ConfigurationOptions = {
     region: AWS_DEFAULT_REGION,
-    credentials: awsCredentials,
-    httpOptions: awsHttpOptions,
+    accessKeyId: AWS_ACCESS_KEY_ID,
+    secretAccessKey: AWS_SECRET_ACCESS_KEY,
+    ...(AWS_SESSION_TOKEN && {
+        sessionToken: AWS_SESSION_TOKEN,
+    }),
+    ...(AWS_OPTION_HTTP_OPTIONS_PROXY_URL && {
+        httpOptions: {
+            agent: proxy(AWS_OPTION_HTTP_OPTIONS_PROXY_URL),
+        },
+    }),
     logger: {
         log: (args: any) => console.log("[AWS.config Logger]", args),
     },
-})
-
-// This sets config for athena-express but doesn't transfer to Athena V3 client
-// So the same settings need to be set there too
-AWS.config.athena = new AWS.Athena()
-if (AWS.config.athena) {
-    if (awsAthenaEndpoint) AWS.config.athena.endpoint = awsAthenaEndpoint
 }
-
-AWS.config.s3 = new AWS.S3({})
-if (AWS.config.s3) {
-    if (awsS3Endpoint) AWS.config.s3.endpoint = awsS3Endpoint
-}
+AWS.config.update(awsConfig)
+console.log("AWS Config", awsConfig)
 
 const athenaExpressConfig: Partial<ConnectionConfigInterface> = {
     aws: AWS, // required
@@ -142,17 +107,6 @@ const athenaExpressConfig: Partial<ConnectionConfigInterface> = {
      * Wait interval between re-checking if the specific Athena query has finished executing
      */
     retry: AWS_ATHENA_OPTION_RETRY_MS,
-    ...(AWS_ATHENA_OPTION_ENCRYPTION_ENABLED && {
-        // optional
-        /**
-         * Encryption configuation example usage:
-         * { EncryptionOption: "SSE_KMS", KmsKey: process.env.kmskey }
-         */
-        encryption: {
-            EncryptionOption: AWS_ATHENA_OPTION_ENCRYPTION_TYPE,
-            [AWS_ATHENA_OPTION_ENCRYPTION_KEY]: AWS_ATHENA_OPTION_ENCRYPTION_VALUE,
-        },
-    }),
 }
 
 console.log("CONFIGURING ATHENA CLIENT WITH PARAMETERS: ", {
